@@ -1,0 +1,89 @@
+services:
+  # 1. Prometheus (Le Cerveau)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=15d' # Rétention locale courte
+      - '--web.enable-lifecycle' # Permet de recharger la config sans redémarrer
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  # 2. Grafana (La Visualisation)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin # À changer à la première connexion
+    restart: unless-stopped
+
+  # 3. VictoriaMetrics (Stockage Long Terme - TP: Stockage Externe)
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:latest
+    container_name: victoriametrics
+    volumes:
+      - vm_data:/victoria-metrics-data
+    command:
+      - '--storageDataPath=/victoria-metrics-data'
+      - '--retentionPeriod=1y' # On garde 1 an d'historique (Bonus TP)
+    ports:
+      - "8428:8428"
+    restart: unless-stopped
+
+  # 4. Node Exporter (TP: Monitoring de CETTE VM)
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+
+  # 5. Alertmanager (Gestion des alertes)
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    volumes:
+      - ./alertmanager:/etc/alertmanager
+    ports:
+      - "9093:9093"
+    restart: unless-stopped
+
+  # 6. Blackbox Exporter (TP: Sonde Web pour Ynov)
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: blackbox-exporter
+    volumes:
+      - ./blackbox:/etc/blackbox_exporter
+    ports:
+      - "9115:9115"
+    restart: unless-stopped
+
+  # 7. PushGateway (TP: Pour mes scripts curl/cron)
+  pushgateway:
+    image: prom/pushgateway:latest
+    container_name: pushgateway
+    ports:
+      - "9091:9091"
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  vm_data:

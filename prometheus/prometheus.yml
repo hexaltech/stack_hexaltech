@@ -1,0 +1,55 @@
+global:
+  scrape_interval: 15s # On récupère les métriques toutes les 15s
+  evaluation_interval: 15s
+
+# C'est ici qu'on configure l'envoi vers le Stockage Long Terme (TP: VictoriaMetrics)
+remote_write:
+  - url: "http://victoriametrics:8428/api/v1/write"
+
+scrape_configs:
+  # 1. Prometheus se surveille lui-même
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # 2. La stack Docker (Node Exporter de la VM)
+  - job_name: 'monitoring_vm'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # 3. Les Exporters de la Stack (TP: Alertmanager, Pushgateway)
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+
+  - job_name: 'pushgateway'
+    static_configs:
+      - targets: ['pushgateway:9091']
+
+  - job_name: 'blackbox'
+    static_configs:
+      - targets: ['blackbox-exporter:9115']
+
+  # 4. Mes Nœuds Physiques PROXMOX (Pour CPU, RAM, NVMe Temp)
+  - job_name: 'proxmox_nodes'
+    static_configs:
+      - targets:
+        - '192.168.1.251:9100'
+        - '192.168.1.252:9100'
+        - '192.168.1.253:9100'
+
+  # 5. Le test Blackbox (TP: Site Ynov)
+  - job_name: 'blackbox_ynov'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]  # On vérifie juste que le site répond "200 OK"
+    static_configs:
+      - targets:
+        - https://www.ynov.com
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
