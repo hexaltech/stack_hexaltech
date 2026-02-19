@@ -1,49 +1,54 @@
 services:
-  # 1. Prometheus (Le Cerveau)
+  # 1. Prometheus (Le Collecteur)
+  # Centralise les métriques de tes nœuds PVE-01, 02 et 03.
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.9.1
     container_name: prometheus
+    restart: unless-stopped
     volumes:
       - ./prometheus:/etc/prometheus
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.retention.time=15d' # Rétention locale courte
-      - '--web.enable-lifecycle' # Permet de recharger la config sans redémarrer
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
     ports:
       - "9090:9090"
-    restart: unless-stopped
 
-  # 2. Grafana (La Visualisation)
+  # 2. Grafana (L'Interface Visuelle)
+  # Pour tes jauges de température et ton monitoring Raspberry Pi.
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:12.3.3
     container_name: grafana
+    restart: unless-stopped
     ports:
       - "3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin # À changer à la première connexion
-    restart: unless-stopped
+      - GF_SECURITY_ADMIN_PASSWORD=admin # À modifier après le premier login
+      - GF_AUTH_ANONYMOUS_ENABLED=true # Optionnel : facilite l'affichage sur ton Pi
 
-  # 3. VictoriaMetrics (Stockage Long Terme - TP: Stockage Externe)
+  # 3. VictoriaMetrics (La Base de Données)
+  # Stocke l'historique de tes cartes 10Gb sur 1 an.
+  # Note : Port 8428 non exposé pour plus de sécurité.
   victoriametrics:
-    image: victoriametrics/victoria-metrics:latest
+    image: victoriametrics/victoria-metrics:v1.135.0
     container_name: victoriametrics
+    restart: unless-stopped
     volumes:
       - vm_data:/victoria-metrics-data
     command:
       - '--storageDataPath=/victoria-metrics-data'
-      - '--retentionPeriod=1y' # On garde 1 an d'historique (Bonus TP)
-    ports:
-      - "8428:8428"
-    restart: unless-stopped
+      - '--retentionPeriod=1y'
 
-  # 4. Node Exporter (TP: Monitoring de CETTE VM)
+  # 4. Node Exporter (L'Agent Système)
+  # Surveille la température (55-59°C) de la VM Debian elle-même.
   node-exporter:
-    image: prom/node-exporter:latest
+    image: prom/node-exporter:v1.10.2
     container_name: node-exporter
+    restart: unless-stopped
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -53,35 +58,36 @@ services:
       - '--path.sysfs=/host/sys'
     ports:
       - "9100:9100"
-    restart: unless-stopped
 
-  # 5. Alertmanager (Gestion des alertes)
+  # 5. Alertmanager (Le Notificateur)
+  # Gère tes alertes de surchauffe à 70°C vers Discord.
   alertmanager:
-    image: prom/alertmanager:latest
+    image: prom/alertmanager:v0.31.1
     container_name: alertmanager
+    restart: unless-stopped
     volumes:
       - ./alertmanager:/etc/alertmanager
     ports:
       - "9093:9093"
-    restart: unless-stopped
 
-  # 6. Blackbox Exporter (TP: Sonde Web pour Ynov)
+  # 6. Blackbox Exporter (La Sonde Web)
+  # Vérifie la disponibilité de tes services HTTP/ICMP.
   blackbox-exporter:
-    image: prom/blackbox-exporter:latest
+    image: prom/blackbox-exporter:v0.28.0
     container_name: blackbox-exporter
+    restart: unless-stopped
     volumes:
       - ./blackbox:/etc/blackbox_exporter
     ports:
       - "9115:9115"
-    restart: unless-stopped
 
-  # 7. PushGateway (TP: Pour mes scripts curl/cron)
+  # 7. PushGateway (Pour les Jobs Ephémères)
   pushgateway:
-    image: prom/pushgateway:latest
+    image: prom/pushgateway:v1.11.2
     container_name: pushgateway
+    restart: unless-stopped
     ports:
       - "9091:9091"
-    restart: unless-stopped
 
 volumes:
   prometheus_data:
