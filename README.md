@@ -7,9 +7,9 @@ L'objectif est de garantir la **haute disponibilité** et la **sécurité thermi
 
 ## 🏗️ Architecture Matérielle
 
-- **Nœuds** : 3x Lenovo M920q (Format *Tiny* 1 litre)
+- **Nœuds** : 3x Lenovo M920q (Format *Tiny*)
 - **Réseau** : Cartes Intel X520 10Gb SFP+ (Intégration directe)
-- **OS** : Proxmox VE 8.x (Basé sur Debian 12/13)
+- **OS** : Proxmox VE 8.3.0 (Basé sur Debian 12/13)
 
 ---
 
