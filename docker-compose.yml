@@ -1,88 +1,95 @@
-# 🚀 Supervision Cluster Proxmox - Hexaltech
+services:
+  # 1. Prometheus (Le Collecteur)
+  # Centralise les métriques de tes nœuds PVE-01, 02 et 03.
+  prometheus:
+    image: prom/prometheus:v3.9.1
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
 
-Ce projet implémente une solution de monitoring robuste pour un cluster de production composé de **trois nœuds Lenovo M920q**.  
-L'objectif est de garantir la **haute disponibilité** et la **sécurité thermique** de l'infrastructure.
+  # 2. Grafana (L'Interface Visuelle)
+  # Pour tes jauges de température et ton monitoring Raspberry Pi.
+  grafana:
+    image: grafana/grafana:12.3.3
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin # À modifier après le premier login
+      - GF_AUTH_ANONYMOUS_ENABLED=true # Optionnel : facilite l'affichage sur ton Pi
 
----
+  # 3. VictoriaMetrics (La Base de Données)
+  # Stocke l'historique de tes cartes 10Gb sur 1 an.
+  # Note : Port 8428 non exposé pour plus de sécurité.
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.135.0
+    container_name: victoriametrics
+    restart: unless-stopped
+    volumes:
+      - vm_data:/victoria-metrics-data
+    command:
+      - '--storageDataPath=/victoria-metrics-data'
+      - '--retentionPeriod=1y'
 
-## 🏗️ Architecture Matérielle
+  # 4. Node Exporter (L'Agent Système)
+  # Surveille la température (55-59°C) de la VM Debian elle-même.
+  node-exporter:
+    image: prom/node-exporter:v1.10.2
+    container_name: node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+    ports:
+      - "9100:9100"
 
-- **Nœuds** : 3x Lenovo M920q (Format *Tiny* 1 litre)
-- **Réseau** : Cartes Intel X520 10Gb SFP+ (Intégration directe)
-- **OS** : Proxmox VE 8.x (Basé sur Debian 12/13)
+  # 5. Alertmanager (Le Notificateur)
+  # Gère tes alertes de surchauffe à 70°C vers Discord.
+  alertmanager:
+    image: prom/alertmanager:v0.31.1
+    container_name: alertmanager
+    restart: unless-stopped
+    volumes:
+      - ./alertmanager:/etc/alertmanager
+    ports:
+      - "9093:9093"
 
----
+  # 6. Blackbox Exporter (La Sonde Web)
+  # Vérifie la disponibilité de tes services HTTP/ICMP.
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.28.0
+    container_name: blackbox-exporter
+    restart: unless-stopped
+    volumes:
+      - ./blackbox:/etc/blackbox_exporter
+    ports:
+      - "9115:9115"
 
-## 🛠️ Stack Logicielle (Dockerized)
+  # 7. PushGateway (Pour les Jobs Ephémères)
+  pushgateway:
+    image: prom/pushgateway:v1.11.2
+    container_name: pushgateway
+    restart: unless-stopped
+    ports:
+      - "9091:9091"
 
-Le déploiement repose sur une stack moderne et performante :
-
-- **VictoriaMetrics** : Stockage long terme des données avec haute compression
-- **Prometheus** : Moteur de collecte et de requêtage (PromQL)
-- **Grafana** : Visualisation centralisée via dashboards dynamiques
-- **Alertmanager** : Dispatching des alertes critiques vers les canaux de communication
-- **Node Exporter & Blackbox Exporter** : Sondes système et vérification de la disponibilité réseau
-
----
-
-## 🔍 Points de Contrôle Critiques
-
-Le monitoring est focalisé sur trois indicateurs vitaux pour la santé du cluster :
-
----
-
-### 1️⃣ 🌡️ Santé Thermique (CPU)
-
-Surveillance des processeurs via la puce `coretemp`.  
-Étant donné l'espace restreint (1L), la gestion de la chaleur est une priorité absolue.
-
-- **Métrique surveillée** : `node_hwmon_temp_celsius`
-- **Seuil d'alerte** : Notification Discord immédiate si la température dépasse **70°C**
-- **Objectif** : Prévenir tout risque de throttling ou arrêt brutal
-
----
-
-### 2️⃣ ⚡ État des Nœuds Proxmox
-
-Vérification en temps réel de la disponibilité de chaque serveur du cluster.
-
-- **Métrique surveillée** : `up`
-- **Visualisation** :
-  - PVE-01 → UP/DOWN
-  - PVE-02 → UP/DOWN
-  - PVE-03 → UP/DOWN
-
-Objectif : Détection instantanée d’une panne d’un nœud.
-
----
-
-### 3️⃣ 🌐 Connectivité 10Gb Ethernet
-
-Surveillance spécifique des liens réseau 10Gb pour assurer la stabilité :
-
-- Du stockage partagé (Ceph / réplication)
-- Des migrations de machines virtuelles
-
-- **Indicateur** : Statut du lien (Up/Down)
-- **Interfaces surveillées** : SFP+ Intel X520
-
----
-
-## 📊 Visualisation (Dashboard Master)
-
-Le tableau de bord Grafana centralise :
-
-- 🔥 **Bar Gauges** de température CPU (lecture instantanée)
-- 📈 **Historique thermique** (Time Series)
-- 🌐 **Statut des liens 10Gb**
-- 🖥️ **Mode Kiosk** optimisé pour affichage permanent sur écran déporté (ex: Raspberry Pi)
-
----
-
-# ⚙️ Installation Rapide
-
-Cloner le projet :
-
-```bash
-git clone https://github.com/ton-compte/stack_hexaltech.git
-cd stack_hexaltech
+volumes:
+  prometheus_data:
+  grafana_data:
+  vm_data:
